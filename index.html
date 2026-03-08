@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClimaNow Pro - Previsão do Tempo Completa</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app" id="app">
+        <!-- Header com busca e tema -->
+        <header>
+            <div class="logo">
+                <i class="fas fa-cloud-sun"></i>
+                <h1>ClimaNow Pro</h1>
+            </div>
+            
+            <div class="header-controls">
+                <button id="themeToggle" class="theme-btn" onclick="toggleTheme()">
+                    <i class="fas fa-moon"></i>
+                </button>
+                
+                <div class="search-box">
+                    <input type="text" id="cityInput" placeholder="Digite o nome da cidade..." autocomplete="off">
+                    <button id="searchBtn"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Loading -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Buscando informações meteorológicas...</p>
+            </div>
+
+            <!-- Conteúdo Principal -->
+            <div id="weatherContent" class="weather-content hidden">
+                <!-- Banner de Alertas -->
+                <div id="alertsBanner" class="alerts-banner hidden">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="alerts-content">
+                        <h4>⚠️ Alertas Meteorológicos</h4>
+                        <p id="alertMessage"></p>
+                    </div>
+                    <button onclick="closeAlerts()"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Clima Atual -->
+                <section class="current-weather glass">
+                    <div class="location">
+                        <h2 id="cityName">-</h2>
+                        <p id="country">-</p>
+                    </div>
+                    
+                    <div class="weather-main">
+                        <div class="temperature">
+                            <span id="temp" class="temp">-</span>
+                            <span class="celsius">°C</span>
+                        </div>
+                        <div class="weather-info">
+                            <img id="weatherIcon" src="" alt="Ícone do clima">
+                            <p id="weatherDesc">-</p>
+                            <p id="feelsLike">Sensação: -°C</p>
+                        </div>
+                    </div>
+
+                    <div class="weather-details">
+                        <div class="detail">
+                            <i class="fas fa-tint"></i>
+                            <span id="humidity">-</span>
+                            <small>Umidade</small>
+                        </div>
+                        <div class="detail">
+                            <i class="fas fa-wind"></i>
+                            <span id="wind">-</span>
+                            <small>Vento (km/h)</small>
+                        </div>
+                        <div class="detail">
+                            <i class="fas fa-compress-alt"></i>
+                            <span id="pressure">-</span>
+                            <small>Pressão</small>
+                        </div>
+                        <div class="detail">
+                            <i class="fas fa-eye"></i>
+                            <span id="visibility">-</span>
+                            <small>Visibilidade</small>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Cards de Comparação -->
+                <section class="comparison-section glass">
+                    <div class="section-header">
+                        <h3><i class="fas fa-balance-scale"></i> Comparar com outras cidades</h3>
+                        <button onclick="toggleComparison()" class="toggle-btn">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="comparisonContent" class="comparison-content hidden">
+                        <div class="comparison-inputs">
+                            <input type="text" id="compareCity1" placeholder="Cidade 1" value="São Paulo">
+                            <input type="text" id="compareCity2" placeholder="Cidade 2" value="Rio de Janeiro">
+                            <button onclick="compareCities()" class="compare-btn">
+                                <i class="fas fa-chart-bar"></i> Comparar
+                            </button>
+                        </div>
+                        
+                        <div id="comparisonResult" class="comparison-result hidden">
+                            <!-- Resultado da comparação via JavaScript -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Gráficos -->
+                <section class="charts-section glass">
+                    <h3><i class="fas fa-chart-line"></i> Gráficos de Temperatura</h3>
+                    
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" onclick="changeChart('hourly', this)">Horário</button>
+                        <button class="chart-tab" onclick="changeChart('daily', this)">Diário</button>
+                        <button class="chart-tab" onclick="changeChart('weekly', this)">Semanal</button>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="tempChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- Previsão Horária -->
+                <section class="hourly-forecast glass">
+                    <h3><i class="fas fa-clock"></i> Próximas 24 horas</h3>
+                    <div class="hourly-container" id="hourlyContainer"></div>
+                </section>
+
+                <!-- Previsão 5 Dias -->
+                <section class="daily-forecast glass">
+                    <h3><i class="fas fa-calendar-alt"></i> Previsão para 5 dias</h3>
+                    <div class="daily-container" id="dailyContainer"></div>
+                </section>
+
+                <!-- Informações Adicionais -->
+                <section class="extra-info glass">
+                    <div class="info-grid">
+                        <div class="info-card" onclick="showDetail('sunrise')">
+                            <i class="fas fa-sun"></i>
+                            <div>
+                                <small>Nascer do sol</small>
+                                <p id="sunrise">-</p>
+                            </div>
+                        </div>
+                        <div class="info-card" onclick="showDetail('sunset')">
+                            <i class="fas fa-moon"></i>
+                            <div>
+                                <small>Pôr do sol</small>
+                                <p id="sunset">-</p>
+                            </div>
+                        </div>
+                        <div class="info-card" onclick="showDetail('max')">
+                            <i class="fas fa-arrow-up"></i>
+                            <div>
+                                <small>Máx. hoje</small>
+                                <p id="maxTemp">-°C</p>
+                            </div>
+                        </div>
+                        <div class="info-card" onclick="showDetail('min')">
+                            <i class="fas fa-arrow-down"></i>
+                            <div>
+                                <small>Mín. hoje</small>
+                                <p id="minTemp">-°C</p>
+                            </div>
+                        </div>
+                        <div class="info-card" onclick="showDetail('rain')">
+                            <i class="fas fa-cloud-rain"></i>
+                            <div>
+                                <small>Chuva</small>
+                                <p id="rainChance">-%</p>
+                            </div>
+                        </div>
+                        <div class="info-card" onclick="showDetail('feels')">
+                            <i class="fas fa-temperature-high"></i>
+                            <div>
+                                <small>Sensação</small>
+                                <p id="feelsLikeCard">-°C</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Mapa e Animações -->
+                <section class="map-section glass">
+                    <h3><i class="fas fa-map-marked-alt"></i> Localização e Clima</h3>
+                    
+                    <div class="weather-animation" id="weatherAnimation">
+                        <!-- Animação via JavaScript -->
+                    </div>
+                    
+                    <div class="map-container">
+                        <iframe 
+                            id="mapFrame"
+                            width="100%" 
+                            height="300" 
+                            frameborder="0" 
+                            style="border:0; border-radius: 15px;"
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                </section>
+
+                <!-- Cards de Favoritos -->
+                <section class="favorites-section glass">
+                    <div class="section-header">
+                        <h3><i class="fas fa-star"></i> Cidades Favoritas</h3>
+                        <button onclick="toggleFavorites()" class="toggle-btn">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="favoritesContent" class="favorites-content">
+                        <div class="favorites-grid" id="favoritesGrid">
+                            <!-- Favoritos via JavaScript -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recomendações -->
+                <section class="recommendations-section glass">
+                    <h3><i class="fas fa-lightbulb"></i> Recomendações do dia</h3>
+                    <div class="recommendations-grid" id="recommendations">
+                        <!-- Recomendações via JavaScript -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Mensagem de erro -->
+            <div id="errorMessage" class="error-message hidden">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Erro ao buscar clima. Verifique o nome da cidade ou sua conexão.</p>
+                <button onclick="getUserLocation()"><i class="fas fa-location-dot"></i> Usar minha localização</button>
+            </div>
+
+            <!-- Tela inicial -->
+            <div id="welcomeScreen" class="welcome-screen">
+                <i class="fas fa-cloud-sun-rain"></i>
+                <h2>Bem-vindo ao ClimaNow Pro</h2>
+                <p>Digite o nome de uma cidade para ver a previsão do tempo completa</p>
+                
+                <div class="popular-cities">
+                    <span>🌆 Cidades populares:</span>
+                    <div class="city-buttons">
+                        <button onclick="getWeather('São Paulo')">São Paulo</button>
+                        <button onclick="getWeather('Rio de Janeiro')">Rio de Janeiro</button>
+                        <button onclick="getWeather('Belo Horizonte')">Belo Horizonte</button>
+                        <button onclick="getWeather('Salvador')">Salvador</button>
+                        <button onclick="getWeather('Brasília')">Brasília</button>
+                        <button onclick="getWeather('Fortaleza')">Fortaleza</button>
+                    </div>
+                </div>
+                
+                <button onclick="getUserLocation()" class="location-btn">
+                    <i class="fas fa-location-dot"></i>
+                    Usar minha localização
+                </button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Desenvolvido com ❤️ usando OpenWeather API | Dados em tempo real</p>
+        </footer>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div id="detailModal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3 id="modalTitle"></h3>
+                <button onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Conteúdo via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
