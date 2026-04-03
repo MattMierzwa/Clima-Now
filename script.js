@@ -1,5 +1,5 @@
-// Configuração da API
-const API_KEY = 'fb5da73546482815b42af679e90b0b4f'; // Sua chave API
+// Configuração da API (MANTIDA ORIGINAL)
+const API_KEY = 'fb5da73546482815b42af679e90b0b4f'; 
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
 // Elementos DOM
@@ -17,7 +17,14 @@ let forecastData = null;
 let chartInstance = null;
 let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
 
-// ========== EVENT LISTENERS ==========
+// Inicialização
+document.addEventListener('DOMContentLoaded', () => {
+    loadLastCity();
+    loadFavorites();
+    updateDate();
+});
+
+// Event Listeners
 searchBtn.addEventListener('click', () => {
     const city = cityInput.value.trim();
     if (city) getWeather(city);
@@ -30,11 +37,13 @@ cityInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Inicializar
-document.addEventListener('DOMContentLoaded', () => {
-    loadLastCity();
-    loadFavorites();
-});
+function updateDate() {
+    const dateEl = document.getElementById('currentDate');
+    if(dateEl) {
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        dateEl.textContent = new Date().toLocaleDateString('pt-BR', options);
+    }
+}
 
 // ========== FUNÇÃO PRINCIPAL ==========
 async function getWeather(city) {
@@ -42,6 +51,7 @@ async function getWeather(city) {
     currentCity = city;
     
     try {
+        // Busca paralela para performance
         const [currentWeather, forecast] = await Promise.all([
             fetch(`${BASE_URL}/weather?q=${city}&appid=${API_KEY}&units=metric&lang=pt_br`),
             fetch(`${BASE_URL}/forecast?q=${city}&appid=${API_KEY}&units=metric&lang=pt_br&cnt=40`)
@@ -54,19 +64,19 @@ async function getWeather(city) {
         currentData = await currentWeather.json();
         forecastData = await forecast.json();
 
-        // Atualizar interface
+        // Atualizar Interface
         updateCurrentWeather(currentData);
         updateHourlyForecast(forecastData);
         updateDailyForecast(forecastData);
         updateExtraInfo(currentData, forecastData);
         updateMap(currentData.coord.lat, currentData.coord.lon);
         updateChart('hourly');
-        updateWeatherAnimation(currentData.weather[0].main);
         checkWeatherAlerts(currentData, forecastData);
         updateRecommendations(currentData);
         checkIfFavorite(currentData.name);
 
         localStorage.setItem('lastCity', city);
+        
         hideLoading();
         showWeatherContent();
         
@@ -76,42 +86,36 @@ async function getWeather(city) {
     }
 }
 
-// ========== FUNÇÕES DE ATUALIZAÇÃO ==========
+// ========== ATUALIZAÇÃO DA UI ==========
 function updateCurrentWeather(data) {
     document.getElementById('cityName').textContent = data.name;
     document.getElementById('country').textContent = data.sys.country;
     document.getElementById('temp').textContent = Math.round(data.main.temp);
     document.getElementById('weatherDesc').textContent = data.weather[0].description;
-    document.getElementById('feelsLike').textContent = `Sensação: ${Math.round(data.main.feels_like)}°C`;
-    document.getElementById('humidity').textContent = `${data.main.humidity}%`;
-    document.getElementById('wind').textContent = Math.round(data.wind.speed * 3.6);
-    document.getElementById('pressure').textContent = `${data.main.pressure} hPa`;
-    document.getElementById('visibility').textContent = `${(data.visibility / 1000).toFixed(1)} km`;
     
     const iconCode = data.weather[0].icon;
-    document.getElementById('weatherIcon').src = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+    document.getElementById('weatherIcon').src = `https://openweathermap.org/img/wn/${iconCode}@4x.png`;
 }
 
 function updateHourlyForecast(data) {
     const container = document.getElementById('hourlyContainer');
     container.innerHTML = '';
     
+    // Pega as próximas 8 previsões (3 horas cada = 24h)
     const hourlyData = data.list.slice(0, 8);
     
     hourlyData.forEach(item => {
         const date = new Date(item.dt * 1000);
-        const hour = date.getHours().toString().padStart(2, '0');
+        const hour = date.getHours().toString().padStart(2, '0') + ':00';
         
-        const card = document.createElement('div');
-        card.className = 'hour-card';
-        card.innerHTML = `
-            <div class="time">${hour}:00</div>
-            <img src="https://openweathermap.org/img/wn/${item.weather[0].icon}.png" alt="Ícone">
-            <div class="hour-temp">${Math.round(item.main.temp)}°C</div>
-            <small>${item.weather[0].description}</small>
+        const div = document.createElement('div');
+        div.className = 'hour-card-mini';
+        div.innerHTML = `
+            <span>${hour}</span>
+            <img src="https://openweathermap.org/img/wn/${item.weather[0].icon}.png" alt="Icon" width="30">
+            <strong>${Math.round(item.main.temp)}°</strong>
         `;
-        
-        container.appendChild(card);
+        container.appendChild(div);
     });
 }
 
@@ -120,229 +124,151 @@ function updateDailyForecast(data) {
     container.innerHTML = '';
     
     const dailyData = {};
+    
+    // Agrupa por dia
     data.list.forEach(item => {
         const date = new Date(item.dt * 1000).toLocaleDateString('pt-BR', { weekday: 'short' });
         if (!dailyData[date]) {
             dailyData[date] = {
                 temps: [],
                 weather: item.weather[0],
-                icon: item.weather[0].icon,
-                desc: item.weather[0].description
+                icon: item.weather[0].icon
             };
         }
         dailyData[date].temps.push(item.main.temp);
     });
     
-    Object.entries(dailyData).slice(0, 5).forEach(([day, data]) => {
-        const maxTemp = Math.max(...data.temps);
-        const minTemp = Math.min(...data.temps);
+    Object.entries(dailyData).slice(0, 5).forEach(([day, info]) => {
+        const max = Math.max(...info.temps);
+        const min = Math.min(...info.temps);
         
-        const card = document.createElement('div');
-        card.className = 'day-card';
-        card.innerHTML = `
-            <div class="day-name">${day}</div>
-            <div class="day-icon">
-                <img src="https://openweathermap.org/img/wn/${data.icon}.png" alt="Ícone">
+        const row = document.createElement('div');
+        row.className = 'day-row';
+        row.innerHTML = `
+            <span style="text-transform: capitalize; width: 60px;">${day}</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <img src="https://openweathermap.org/img/wn/${info.icon}.png" width="30" alt="icon">
+                <span style="font-size:0.9rem; color:var(--text-secondary)">${info.weather.description}</span>
             </div>
-            <div class="day-temp">
-                <span class="max">${Math.round(maxTemp)}°</span>
-                <span class="min">${Math.round(minTemp)}°</span>
+            <div style="font-weight:600;">
+                ${Math.round(max)}° <span style="color:var(--text-secondary); font-weight:400; font-size:0.8rem;">/ ${Math.round(min)}°</span>
             </div>
-            <div class="day-desc">${data.desc}</div>
         `;
-        
-        container.appendChild(card);
+        container.appendChild(row);
     });
 }
 
-function updateExtraInfo(currentData, forecastData) {
-    const sunrise = new Date(currentData.sys.sunrise * 1000);
-    const sunset = new Date(currentData.sys.sunset * 1000);
+function updateExtraInfo(current, forecast) {
+    const sunrise = new Date(current.sys.sunrise * 1000);
+    const sunset = new Date(current.sys.sunset * 1000);
     
-    document.getElementById('sunrise').textContent = sunrise.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('sunset').textContent = sunset.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('maxTemp').textContent = `${Math.round(currentData.main.temp_max)}°C`;
-    document.getElementById('minTemp').textContent = `${Math.round(currentData.main.temp_min)}°C`;
+    document.getElementById('sunrise').textContent = sunrise.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('sunset').textContent = sunset.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
     
-    const rainChance = forecastData.list[0].pop * 100;
-    document.getElementById('rainChance').textContent = `${Math.round(rainChance)}%`;
-    document.getElementById('feelsLikeCard').textContent = `${Math.round(currentData.main.feels_like)}°C`;
+    document.getElementById('maxTemp').textContent = Math.round(current.main.temp_max);
+    document.getElementById('minTemp').textContent = Math.round(current.main.temp_min);
+    document.getElementById('wind').textContent = Math.round(current.wind.speed * 3.6) + ' km/h';
+    document.getElementById('humidity').textContent = current.main.humidity + '%';
+    document.getElementById('pressure').textContent = current.main.pressure + ' hPa';
+    document.getElementById('visibility').textContent = (current.visibility / 1000).toFixed(1) + ' km';
+    document.getElementById('feelsLikeCard').textContent = Math.round(current.main.feels_like) + '°C';
 }
 
 function updateMap(lat, lon) {
     const mapFrame = document.getElementById('mapFrame');
-    mapFrame.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.1},${lat-0.1},${lon+0.1},${lat+0.1}&layer=mapnik&marker=${lat},${lon}`;
+    // Usando OpenStreetMap embed simples
+    mapFrame.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.05},${lat-0.05},${lon+0.05},${lat+0.05}&layer=mapnik&marker=${lat},${lon}`;
 }
 
-// ========== GRÁFICOS ==========
+// ========== GRÁFICOS (Chart.js) ==========
 function updateChart(type) {
     if (!forecastData) return;
     
     const ctx = document.getElementById('tempChart').getContext('2d');
     
-    if (chartInstance) {
-        chartInstance.destroy();
-    }
+    if (chartInstance) chartInstance.destroy();
     
     let labels = [];
     let temps = [];
     
-    switch(type) {
-        case 'hourly':
-            labels = forecastData.list.slice(0, 8).map(item => {
-                const date = new Date(item.dt * 1000);
-                return `${date.getHours()}h`;
-            });
-            temps = forecastData.list.slice(0, 8).map(item => item.main.temp);
-            break;
-            
-        case 'daily':
-            const daily = {};
-            forecastData.list.forEach(item => {
-                const date = new Date(item.dt * 1000).toLocaleDateString('pt-BR', { weekday: 'short' });
-                if (!daily[date]) {
-                    daily[date] = [];
-                }
-                daily[date].push(item.main.temp);
-            });
-            
-            labels = Object.keys(daily).slice(0, 5);
-            temps = Object.values(daily).slice(0, 5).map(d => 
-                Math.max(...d)
-            );
-            break;
-            
-        case 'weekly':
-            const weekly = {};
-            forecastData.list.forEach(item => {
-                const date = new Date(item.dt * 1000).toLocaleDateString('pt-BR', { weekday: 'long' });
-                if (!weekly[date]) {
-                    weekly[date] = [];
-                }
-                weekly[date].push(item.main.temp);
-            });
-            
-            labels = Object.keys(weekly);
-            temps = Object.values(weekly).map(d => 
-                d.reduce((a, b) => a + b, 0) / d.length
-            );
-            break;
+    // Configuração de cores baseada no tema
+    const isDark = !document.body.classList.contains('light-theme');
+    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    if (type === 'hourly') {
+        labels = forecastData.list.slice(0, 8).map(i => {
+            const d = new Date(i.dt * 1000);
+            return `${d.getHours()}h`;
+        });
+        temps = forecastData.list.slice(0, 8).map(i => i.main.temp);
+    } else {
+        // Daily aggregation logic simplified for chart
+        const daily = {};
+        forecastData.list.forEach(item => {
+            const date = new Date(item.dt * 1000).toLocaleDateString('pt-BR', { weekday: 'short' });
+            if(!daily[date]) daily[date] = [];
+            daily[date].push(item.main.temp);
+        });
+        labels = Object.keys(daily).slice(0, 5);
+        temps = Object.values(daily).slice(0, 5).map(arr => Math.max(...arr));
     }
-    
+
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Temperatura (°C)',
+                label: 'Temperatura',
                 data: temps,
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                tension: 0.4
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: 'white' }
-                }
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: 'white' }
+                y: { 
+                    grid: { color: gridColor },
+                    ticks: { color: textColor }
                 },
-                x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: 'white' }
+                x: { 
+                    grid: { display: false },
+                    ticks: { color: textColor }
                 }
             }
         }
     });
 }
 
-function changeChart(type, element) {
-    document.querySelectorAll('.chart-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    element.classList.add('active');
+function changeChart(type, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
     updateChart(type);
 }
 
-// ========== COMPARAÇÃO ==========
-async function compareCities() {
-    const city1 = document.getElementById('compareCity1').value;
-    const city2 = document.getElementById('compareCity2').value;
-    
-    showLoading();
-    
-    try {
-        const [data1, data2] = await Promise.all([
-            fetch(`${BASE_URL}/weather?q=${city1}&appid=${API_KEY}&units=metric&lang=pt_br`),
-            fetch(`${BASE_URL}/weather?q=${city2}&appid=${API_KEY}&units=metric&lang=pt_br`)
-        ]);
-        
-        if (!data1.ok || !data2.ok) {
-            throw new Error('Cidade não encontrada');
-        }
-        
-        const weather1 = await data1.json();
-        const weather2 = await data2.json();
-        
-        const resultDiv = document.getElementById('comparisonResult');
-        resultDiv.classList.remove('hidden');
-        
-        resultDiv.innerHTML = `
-            <div class="comparison-city">
-                <h4>${weather1.name}</h4>
-                <div style="font-size: 2rem; margin: 10px 0;">${Math.round(weather1.main.temp)}°C</div>
-                <div>Umidade: ${weather1.main.humidity}%</div>
-                <div>Vento: ${Math.round(weather1.wind.speed * 3.6)} km/h</div>
-            </div>
-            <div class="comparison-city">
-                <h4>${weather2.name}</h4>
-                <div style="font-size: 2rem; margin: 10px 0;">${Math.round(weather2.main.temp)}°C</div>
-                <div>Umidade: ${weather2.main.humidity}%</div>
-                <div>Vento: ${Math.round(weather2.wind.speed * 3.6)} km/h</div>
-            </div>
-        `;
-        
-        hideLoading();
-        
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao comparar cidades');
-        hideLoading();
-    }
-}
-
-// ========== ALERTAS ==========
-function checkWeatherAlerts(currentData, forecastData) {
+// ========== ALERTAS E RECOMENDAÇÕES ==========
+function checkWeatherAlerts(current, forecast) {
+    const banner = document.getElementById('alertsBanner');
+    const msg = document.getElementById('alertMessage');
     const alerts = [];
-    
-    if (currentData.main.temp > 35) {
-        alerts.push('🔥 Temperatura muito alta! Mantenha-se hidratado.');
-    }
-    if (currentData.main.temp < 10) {
-        alerts.push('❄️ Temperatura baixa! Agasalhe-se bem.');
-    }
-    if (currentData.wind.speed * 3.6 > 50) {
-        alerts.push('💨 Ventos fortes! Cuidado ao sair.');
-    }
-    if (forecastData.list[0].pop > 0.7) {
-        alerts.push('🌧️ Alta probabilidade de chuva! Leve guarda-chuva.');
-    }
-    
-    const alertsBanner = document.getElementById('alertsBanner');
-    const alertMessage = document.getElementById('alertMessage');
-    
+
+    if (current.main.temp > 30) alerts.push("Calor intenso. Hidrate-se!");
+    if (current.main.temp < 15) alerts.push("Frio detectado. Agasalhe-se.");
+    if (current.wind.speed > 10) alerts.push("Ventos fortes.");
+    if (forecast.list[0].pop > 0.6) alerts.push("Alta chance de chuva.");
+
     if (alerts.length > 0) {
-        alertMessage.innerHTML = alerts.join('<br>');
-        alertsBanner.classList.remove('hidden');
+        msg.textContent = alerts.join(" • ");
+        banner.classList.remove('hidden');
     } else {
-        alertsBanner.classList.add('hidden');
+        banner.classList.add('hidden');
     }
 }
 
@@ -350,257 +276,107 @@ function closeAlerts() {
     document.getElementById('alertsBanner').classList.add('hidden');
 }
 
-// ========== ANIMAÇÕES ==========
-function updateWeatherAnimation(weatherCondition) {
-    const container = document.getElementById('weatherAnimation');
-    weatherCondition = weatherCondition.toLowerCase();
+function updateRecommendations(data) {
+    const container = document.getElementById('recommendations');
+    const temp = data.main.temp;
+    let html = '';
+
+    if (temp > 25) html += `<div class="rec-item">🕶️ Ótimo dia para atividades ao ar livre.</div>`;
+    if (data.main.humidity > 70) html += `<div class="rec-item">💧 Ar úmido. Cuidado com alergias.</div>`;
+    if (data.wind.speed * 3.6 > 20) html += `<div class="rec-item">🍃 Vento moderado, bom para ventilar a casa.</div>`;
     
-    let animation = '';
+    if (html === '') html = `<div class="rec-item">☀️ Clima agradável. Aproveite!</div>`;
     
-    if (weatherCondition.includes('rain')) {
-        animation = '<div class="rain-animation">';
-        for (let i = 0; i < 30; i++) {
-            animation += `<div class="rain-drop" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random()}s;"></div>`;
-        }
-        animation += '</div>';
-    }
-    else if (weatherCondition.includes('cloud')) {
-        animation = `
-            <div class="cloud-animation">
-                <div class="cloud" style="width: 150px; height: 60px; top: 20px;"></div>
-                <div class="cloud" style="width: 120px; height: 40px; top: 40px; animation-delay: 5s;"></div>
-            </div>
-        `;
-    }
-    else if (weatherCondition.includes('clear')) {
-        animation = '<div class="sun-animation"><div class="sun"></div></div>';
-    }
-    
-    container.innerHTML = animation;
+    container.innerHTML = html;
 }
 
-// ========== FAVORITOS ==========
-function toggleFavorite(city) {
-    const index = favorites.indexOf(city);
+// ========== COMPARAÇÃO E FAVORITOS ==========
+async function compareCities() {
+    const c1 = document.getElementById('compareCity1').value;
+    const c2 = document.getElementById('compareCity2').value;
+    const resDiv = document.getElementById('comparisonResult');
     
-    if (index === -1) {
-        favorites.push(city);
-        alert(`⭐ ${city} adicionada aos favoritos!`);
+    try {
+        const [d1, d2] = await Promise.all([
+            fetch(`${BASE_URL}/weather?q=${c1}&appid=${API_KEY}&units=metric`),
+            fetch(`${BASE_URL}/weather?q=${c2}&appid=${API_KEY}&units=metric`)
+        ]);
+        
+        const w1 = await d1.json();
+        const w2 = await d2.json();
+        
+        resDiv.classList.remove('hidden');
+        resDiv.innerHTML = `
+            <div style="display:flex; justify-content:space-around; margin-top:15px; text-align:center;">
+                <div>
+                    <h4>${w1.name}</h4>
+                    <div style="font-size:1.5rem; color:var(--accent-color)">${Math.round(w1.main.temp)}°C</div>
+                </div>
+                <div style="align-self:center; color:var(--text-secondary)">VS</div>
+                <div>
+                    <h4>${w2.name}</h4>
+                    <div style="font-size:1.5rem; color:var(--accent-color)">${Math.round(w2.main.temp)}°C</div>
+                </div>
+            </div>
+        `;
+    } catch(e) { alert('Erro ao comparar cidades'); }
+}
+
+function toggleComparison() {
+    document.getElementById('comparisonContent').classList.toggle('hidden');
+}
+
+function checkIfFavorite(city) {
+    // Lógica simplificada para UI
+    const favSection = document.querySelector('.favorites-card h3');
+    if(favorites.includes(city)) {
+        favSection.innerHTML = '<i class="fas fa-star" style="color:#fbbf24"></i> Favoritos';
     } else {
-        favorites.splice(index, 1);
-        alert(`🗑️ ${city} removida dos favoritos!`);
+        favSection.innerHTML = '<i class="far fa-star"></i> Favoritos';
+        // Adiciona botão rápido para favoritar no Hero se não for favorito
+        const hero = document.querySelector('.hero-header');
+        if(!document.getElementById('addFavBtn')) {
+            const btn = document.createElement('button');
+            btn.id = 'addFavBtn';
+            btn.innerHTML = '<i class="far fa-bookmark"></i>';
+            btn.style.cssText = "background:none; border:none; color:white; cursor:pointer; font-size:1.2rem;";
+            btn.onclick = () => { toggleFavorite(city); btn.remove(); };
+            hero.appendChild(btn);
+        }
     }
-    
-    localStorage.setItem('favorites', JSON.stringify(favorites));
-    loadFavorites();
+}
+
+function toggleFavorite(city) {
+    if (!favorites.includes(city)) {
+        favorites.push(city);
+        localStorage.setItem('favorites', JSON.stringify(favorites));
+        loadFavorites();
+        alert(`${city} adicionada aos favoritos!`);
+    }
 }
 
 function loadFavorites() {
     const grid = document.getElementById('favoritesGrid');
-    
     if (favorites.length === 0) {
-        grid.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma cidade favorita ainda</div>';
+        grid.innerHTML = '<p style="color:var(--text-secondary); font-size:0.9rem;">Nenhum favorito salvo.</p>';
         return;
     }
     
     grid.innerHTML = favorites.map(city => `
-        <div class="favorite-card" onclick="getWeather('${city}')">
-            <button class="remove-fav" onclick="event.stopPropagation(); toggleFavorite('${city}')">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="favorite-city">${city}</div>
-            <div class="favorite-temp" id="fav-temp-${city}">-°C</div>
-        </div>
-    `).join('');
-    
-    favorites.forEach(updateFavoriteWeather);
-}
-
-async function updateFavoriteWeather(city) {
-    try {
-        const response = await fetch(`${BASE_URL}/weather?q=${city}&appid=${API_KEY}&units=metric`);
-        const data = await response.json();
-        
-        const tempEl = document.getElementById(`fav-temp-${city}`);
-        if (tempEl) {
-            tempEl.textContent = `${Math.round(data.main.temp)}°C`;
-        }
-    } catch (error) {
-        console.error(`Erro ao buscar ${city}:`, error);
-    }
-}
-
-function checkIfFavorite(city) {
-    const locationDiv = document.querySelector('.location');
-    const existingBtn = document.querySelector('.favorite-btn');
-    
-    if (existingBtn) {
-        existingBtn.remove();
-    }
-    
-    const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-btn';
-    favBtn.innerHTML = favorites.includes(city) ? '⭐' : '☆';
-    favBtn.style.cssText = `
-        background: none;
-        border: none;
-        font-size: 2rem;
-        cursor: pointer;
-        margin-left: 10px;
-    `;
-    favBtn.onclick = (e) => {
-        e.stopPropagation();
-        toggleFavorite(city);
-    };
-    
-    locationDiv.appendChild(favBtn);
-}
-
-// ========== RECOMENDAÇÕES ==========
-function updateRecommendations(data) {
-    const container = document.getElementById('recommendations');
-    const temp = data.main.temp;
-    
-    let recommendations = [];
-    
-    if (temp > 30) {
-        recommendations.push({
-            icon: '🥤',
-            title: 'Hidratação',
-            text: 'Beba bastante água'
-        });
-    } else if (temp < 15) {
-        recommendations.push({
-            icon: '🧥',
-            title: 'Agasalho',
-            text: 'Use casaco'
-        });
-    }
-    
-    if (data.main.humidity > 70) {
-        recommendations.push({
-            icon: '💧',
-            title: 'Umidade',
-            text: 'Cuidado com alergias'
-        });
-    }
-    
-    container.innerHTML = recommendations.map(rec => `
-        <div class="recommendation-card">
-            <div style="font-size: 2rem; margin-bottom: 10px;">${rec.icon}</div>
-            <h4>${rec.title}</h4>
-            <p>${rec.text}</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(255,255,255,0.05); border-radius:8px; margin-bottom:5px; cursor:pointer;" onclick="getWeather('${city}')">
+            <span>${city}</span>
+            <i class="fas fa-trash" style="color:#ef4444; font-size:0.8rem;" onclick="event.stopPropagation(); removeFav('${city}')"></i>
         </div>
     `).join('');
 }
 
-// ========== MODAL ==========
-function showDetail(type) {
-    const modal = document.getElementById('detailModal');
-    const title = document.getElementById('modalTitle');
-    const body = document.getElementById('modalBody');
-    
-    let content = '';
-    
-    switch(type) {
-        case 'sunrise':
-            title.textContent = 'Nascer do Sol';
-            content = `<p>O sol nasceu às ${document.getElementById('sunrise').textContent}</p>`;
-            break;
-        case 'sunset':
-            title.textContent = 'Pôr do Sol';
-            content = `<p>O sol vai se pôr às ${document.getElementById('sunset').textContent}</p>`;
-            break;
-        case 'max':
-            title.textContent = 'Temperatura Máxima';
-            content = `<p>A máxima hoje é ${document.getElementById('maxTemp').textContent}</p>`;
-            break;
-    }
-    
-    body.innerHTML = content;
-    modal.classList.remove('hidden');
+function removeFav(city) {
+    favorites = favorites.filter(c => c !== city);
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    loadFavorites();
 }
 
-function closeModal() {
-    document.getElementById('detailModal').classList.add('hidden');
-}
-
-// ========== TEMA ==========
-function toggleTheme() {
-    const body = document.body;
-    const themeBtn = document.getElementById('themeToggle');
-    
-    if (body.classList.contains('dark-theme')) {
-        body.classList.remove('dark-theme');
-        themeBtn.innerHTML = '<i class="fas fa-moon"></i>';
-    } else {
-        body.classList.add('dark-theme');
-        themeBtn.innerHTML = '<i class="fas fa-sun"></i>';
-    }
-}
-
-// ========== GEOLOCALIZAÇÃO ==========
-function getUserLocation() {
-    showLoading();
-    welcomeScreen.classList.add('hidden');
-    
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                
-                try {
-                    const response = await fetch(
-                        `${BASE_URL}/weather?lat=${latitude}&lon=${longitude}&appid=${API_KEY}&units=metric&lang=pt_br`
-                    );
-                    
-                    const data = await response.json();
-                    getWeather(data.name);
-                    
-                } catch (error) {
-                    console.error('Erro:', error);
-                    showError();
-                }
-            },
-            (error) => {
-                console.error('Erro de geolocalização:', error);
-                hideLoading();
-                welcomeScreen.classList.remove('hidden');
-                alert('Não foi possível obter sua localização');
-            }
-        );
-    } else {
-        alert('Seu navegador não suporta geolocalização');
-        hideLoading();
-        welcomeScreen.classList.remove('hidden');
-    }
-}
-
-// ========== FUNÇÕES AUXILIARES ==========
-function loadLastCity() {
-    const lastCity = localStorage.getItem('lastCity');
-    if (lastCity) {
-        cityInput.value = lastCity;
-        getWeather(lastCity);
-    }
-}
-
-function toggleComparison() {
-    const content = document.getElementById('comparisonContent');
-    const btn = event.target.closest('button').querySelector('i');
-    
-    content.classList.toggle('hidden');
-    btn.style.transform = content.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-}
-
-function toggleFavorites() {
-    const content = document.getElementById('favoritesContent');
-    const btn = event.target.closest('button').querySelector('i');
-    
-    content.classList.toggle('hidden');
-    btn.style.transform = content.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-}
-
+// ========== UTILITÁRIOS DE UI ==========
 function showLoading() {
     loading.classList.remove('hidden');
     weatherContent.classList.add('hidden');
@@ -618,7 +394,71 @@ function showWeatherContent() {
 
 function showError() {
     loading.classList.add('hidden');
-    weatherContent.classList.add('hidden');
     welcomeScreen.classList.add('hidden');
+    weatherContent.classList.add('hidden');
     errorMessage.classList.remove('hidden');
+}
+
+function toggleTheme() {
+    document.body.classList.toggle('light-theme');
+    const btn = document.getElementById('themeToggle');
+    if(document.body.classList.contains('light-theme')) {
+        btn.innerHTML = '<i class="fas fa-sun"></i> Modo Claro';
+    } else {
+        btn.innerHTML = '<i class="fas fa-moon"></i> Modo Escuro';
+    }
+    // Re-render chart to update colors
+    if(chartInstance) {
+        const activeTab = document.querySelector('.tab.active');
+        if(activeTab) updateChart(activeTab.textContent.includes('24h') ? 'hourly' : 'daily');
+    }
+}
+
+function loadLastCity() {
+    const last = localStorage.getItem('lastCity');
+    if(last) {
+        cityInput.value = last;
+        getWeather(last);
+    } else {
+        welcomeScreen.classList.remove('hidden');
+    }
+}
+
+// Modal Logic
+function showDetail(type) {
+    const modal = document.getElementById('detailModal');
+    const body = document.getElementById('modalBody');
+    const title = document.getElementById('modalTitle');
+    
+    if(type === 'sun') {
+        title.textContent = "Ciclo Solar";
+        body.innerHTML = `
+            <p>Nascer do Sol: <strong>${document.getElementById('sunrise').textContent}</strong></p>
+            <p>Pôr do Sol: <strong>${document.getElementById('sunset').textContent}</strong></p>
+            <p style="margin-top:10px; font-size:0.9rem; color:var(--text-secondary)">A duração do dia influencia na temperatura percebida.</p>
+        `;
+    }
+    modal.classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('detailModal').classList.add('hidden');
+}
+
+function getUserLocation() {
+    showLoading();
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            try {
+                const res = await fetch(`${BASE_URL}/weather?lat=${latitude}&lon=${longitude}&appid=${API_KEY}&units=metric&lang=pt_br`);
+                const data = await res.json();
+                getWeather(data.name);
+            } catch(e) { showError(); }
+        }, () => {
+            alert("Permissão de localização negada.");
+            hideLoading();
+            welcomeScreen.classList.remove('hidden');
+        });
+    }
 }
